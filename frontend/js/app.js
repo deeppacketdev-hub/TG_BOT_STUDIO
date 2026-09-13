@@ -16,6 +16,9 @@ const App = (() => {
         isPaid: false,
         startTime: Date.now(),
         logEntries: [],
+        currentUser: null,
+        studioConfig: null,
+        sessionToken: localStorage.getItem('tg_studio_session_token') || null,
     };
 
     // ─── DOM Helpers ─────────────────────────────────────────────
@@ -24,16 +27,29 @@ const App = (() => {
 
     // ─── API Helper ──────────────────────────────────────────────
     async function api(endpoint, data = null) {
+        const headers = { 'Content-Type': 'application/json' };
+
+        // Attach Telegram WebApp initData if available
+        const tgInitData = window.Telegram?.WebApp?.initData;
+        if (tgInitData) {
+            headers['X-Telegram-Init-Data'] = tgInitData;
+        } else if (state.sessionToken) {
+            headers['X-Session-Token'] = state.sessionToken;
+        } else {
+            // Local development fallback
+            headers['X-Telegram-Init-Data'] = 'dev_mode';
+        }
+
         const opts = {
             method: data ? 'POST' : 'GET',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
         };
         if (data) opts.body = JSON.stringify(data);
 
         const resp = await fetch(`/api/${endpoint}`, opts);
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
-            throw new Error(err.error || `HTTP ${resp.status}`);
+            throw new Error(err.detail || err.error || `HTTP ${resp.status}`);
         }
 
         const ct = resp.headers.get('content-type');
@@ -520,6 +536,17 @@ const App = (() => {
         // ─── Language Switcher ──────────────────────────────────
         setupLanguageSwitcher();
 
+        // ─── Wallet Modal Listeners ─────────────────────────────
+        $('#walletPill')?.addEventListener('click', openWalletModal);
+        $('#userBadge')?.addEventListener('click', openWalletModal);
+        $('#btnCloseWallet')?.addEventListener('click', closeWalletModal);
+        $('#walletModalOverlay')?.addEventListener('click', (e) => {
+            if (e.target.id === 'walletModalOverlay') closeWalletModal();
+        });
+
+        // ─── Initialize Telegram Auth & User Profile ────────────
+        initTelegramAuth();
+
         // ─── Card Glow Effect ───────────────────────────────────
         document.addEventListener('mousemove', (e) => {
             document.querySelectorAll('.bot-type-card').forEach(card => {
@@ -588,6 +615,114 @@ const App = (() => {
         });
     }
 
+    // ─── Telegram Mini App & User Authentication ─────────────────
+    async function initTelegramAuth() {
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            try {
+                tg.ready();
+                tg.expand();
+                consoleLog(`Telegram WebApp initialized (platform: ${tg.platform || 'web'})`, 'success');
+            } catch (e) {
+                consoleLog(`Telegram WebApp init: ${e.message}`, 'info');
+            }
+        } else {
+            consoleLog('Running in Standalone Browser (Dev Mode fallback active)', 'info');
+        }
+
+        await fetchUserProfile();
+    }
+
+    async function fetchUserProfile() {
+        try {
+            const data = await api('me');
+            state.currentUser = data.user;
+            state.studioConfig = data.studio;
+
+            const nameEl = $('#userName');
+            const balanceEl = $('#userBalance');
+            const modeEl = $('#userModeTag');
+            const avatarEl = $('#userAvatar');
+
+            if (data.user) {
+                const displayName = data.user.username ? `@${data.user.username}` : (data.user.first_name || 'User');
+                if (nameEl) nameEl.textContent = displayName;
+                if (balanceEl) balanceEl.textContent = data.user.balance ?? 0;
+
+                if (modeEl) {
+                    if (data.user.is_dev) {
+                        modeEl.textContent = 'DEV';
+                        modeEl.className = 'user-mode-tag dev';
+                        modeEl.title = 'Розробницький режим (Mock юзер)';
+                    } else {
+                        modeEl.textContent = 'TG';
+                        modeEl.className = 'user-mode-tag tg';
+                        modeEl.title = 'Авторизовано через Telegram Mini App';
+                    }
+                }
+
+                if (avatarEl && data.user.photo_url) {
+                    avatarEl.innerHTML = `<img src="${data.user.photo_url}" alt="${displayName}">`;
+                }
+
+                consoleLog(`Account verified: ${displayName} | Balance: ${data.user.balance ?? 0} TK`, 'info');
+            }
+        } catch (e) {
+            consoleLog(`Auth status: ${e.message}`, 'error');
+        }
+    }
+
+    async function openWalletModal() {
+        const overlay = $('#walletModalOverlay');
+        if (!overlay) return;
+
+        overlay.classList.add('open');
+        $('#modalWalletBalance').textContent = state.currentUser ? state.currentUser.balance : '--';
+        if (state.currentUser) {
+            const handle = state.currentUser.username ? `@${state.currentUser.username}` : state.currentUser.first_name;
+            $('#modalWalletUser').textContent = `Account: ${handle} (TG ID: ${state.currentUser.telegram_id})`;
+        }
+
+        try {
+            const walletData = await api('wallet');
+            if (walletData && walletData.balance !== undefined) {
+                $('#modalWalletBalance').textContent = walletData.balance;
+                if (state.currentUser) state.currentUser.balance = walletData.balance;
+                $('#userBalance').textContent = walletData.balance;
+            }
+
+            const txListEl = $('#walletTxList');
+            if (txListEl) {
+                if (walletData.transactions && walletData.transactions.length > 0) {
+                    txListEl.innerHTML = walletData.transactions.map(tx => {
+                        const isPos = tx.delta > 0;
+                        const dateStr = new Date(tx.created_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        return `
+                            <div class="tx-item">
+                                <div class="tx-info">
+                                    <div class="tx-reason">${tx.reason}</div>
+                                    <div class="tx-time">${dateStr}</div>
+                                </div>
+                                <span class="tx-delta ${isPos ? 'positive' : 'negative'}">
+                                    ${isPos ? '+' : ''}${tx.delta} TK
+                                </span>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    txListEl.innerHTML = '<div class="tx-empty">Немає транзакцій</div>';
+                }
+            }
+        } catch (e) {
+            consoleLog(`Failed to fetch wallet: ${e.message}`, 'error');
+        }
+    }
+
+    function closeWalletModal() {
+        const overlay = $('#walletModalOverlay');
+        if (overlay) overlay.classList.remove('open');
+    }
+
     // ─── Public API ──────────────────────────────────────────────
     return {
         init,
@@ -600,6 +735,9 @@ const App = (() => {
         validateToken,
         consoleLog,
         api,
+        fetchUserProfile,
+        openWalletModal,
+        closeWalletModal,
     };
 })();
 

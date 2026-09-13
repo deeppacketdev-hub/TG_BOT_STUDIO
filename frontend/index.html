@@ -10,6 +10,9 @@
 
     <title>TG_BOT_STUDIO // CONSOLE_v2.0</title>
 
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -33,6 +36,20 @@
         </div>
 
         <div class="header-controls">
+            <!-- User Profile & Wallet Pill -->
+            <div class="user-profile-widget" id="userProfileWidget">
+                <div class="wallet-pill" id="walletPill" title="Гаманець токенів">
+                    <span class="token-icon">🪙</span>
+                    <span class="token-amount" id="userBalance">--</span>
+                    <span class="token-ticker">TK</span>
+                </div>
+                <div class="user-badge" id="userBadge" title="Профіль облікового запису">
+                    <span class="user-avatar" id="userAvatar">👤</span>
+                    <span class="user-name" id="userName">dev_tester</span>
+                    <span class="user-mode-tag" id="userModeTag">DEV</span>
+                </div>
+            </div>
+
             <!-- Language Switcher -->
             <div class="lang-switcher" id="langSwitcher">
                 <span class="lang-label">LANG:</span>
@@ -358,8 +375,35 @@
         </div>
     </div>
 
-    <!-- ─── Toast Notifications ─── -->
-    <div class="toast-container" id="toastContainer"></div>
+    <!-- ─── Wallet Modal Dialog ─── -->
+    <div class="wallet-modal-overlay" id="walletModalOverlay">
+        <div class="wallet-modal" id="walletModal">
+            <div class="wallet-modal-header">
+                <div class="wallet-modal-title">
+                    <span class="wallet-modal-icon">🪙</span>
+                    <span>TOKEN_WALLET // ACCOUNT</span>
+                </div>
+                <button class="wallet-modal-close" id="btnCloseWallet">✕</button>
+            </div>
+            <div class="wallet-modal-body">
+                <div class="wallet-balance-card">
+                    <div class="wallet-card-label">AVAILABLE TOKENS:</div>
+                    <div class="wallet-card-val"><span id="modalWalletBalance">--</span> <span class="wallet-card-unit">TK</span></div>
+                    <div class="wallet-card-sub" id="modalWalletUser">Account: @dev_tester</div>
+                </div>
+
+                <div class="wallet-notice">
+                    <span class="wallet-notice-icon">ℹ️</span>
+                    <span>1 токен = 1 згенерований та запущений бот. Оплата пакетів Stars доступна в Telegram Mini App.</span>
+                </div>
+
+                <div class="wallet-history-title">TRANSACTION_HISTORY:</div>
+                <div class="wallet-transactions-list" id="walletTxList">
+                    <div class="tx-empty">Завантаження журналу транзакцій...</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="/js/i18n.js"></script>
     <script src="/js/app.js"></script>
