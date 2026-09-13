@@ -1,0 +1,186 @@
+"""
+Обробники бота-каталогу товарів.
+Категорії, товари, кошик та оформлення замовлення.
+"""
+
+from aiogram import Router, F
+from aiogram.filters import CommandStart
+from aiogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
+
+router = Router()
+
+WELCOME_TEXT = """{{ welcome_text | default('🛍 Вітаємо в нашому магазині!\n\nОберіть категорію товарів:') }}"""
+
+# ─── Каталог товарів (згенеровано конструктором) ────────────────────
+CATALOG = {{ catalog | tojson(indent=4) }}
+
+# Кошик: user_id → [{product_id, name, price, qty}]
+_carts: dict[int, list[dict]] = {}
+
+
+def get_categories_kb() -> InlineKeyboardMarkup:
+    buttons = []
+    for cat in CATALOG:
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{cat.get('emoji', '📦')} {cat['name']}",
+                callback_data=f"cat_{cat['id']}",
+            )
+        ])
+    buttons.append([InlineKeyboardButton(text="🛒 Кошик", callback_data="cart_view")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_products_kb(category_id: str) -> InlineKeyboardMarkup | None:
+    cat = next((c for c in CATALOG if c["id"] == category_id), None)
+    if not cat:
+        return None
+    buttons = []
+    for prod in cat.get("products", []):
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{prod['name']} — {prod['price']} грн",
+                callback_data=f"prod_{prod['id']}",
+            )
+        ])
+    buttons.append([InlineKeyboardButton(text="⬅️ Категорії", callback_data="back_categories")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def find_product(product_id: str) -> dict | None:
+    for cat in CATALOG:
+        for prod in cat.get("products", []):
+            if prod["id"] == product_id:
+                return prod
+    return None
+
+
+@router.message(CommandStart())
+async def cmd_start(message: Message) -> None:
+    await message.answer(WELCOME_TEXT, reply_markup=get_categories_kb())
+
+
+@router.callback_query(F.data == "back_categories")
+async def back_to_categories(callback: CallbackQuery) -> None:
+    await callback.message.edit_text(WELCOME_TEXT, reply_markup=get_categories_kb())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cat_"))
+async def show_category(callback: CallbackQuery) -> None:
+    cat_id = callback.data.replace("cat_", "")
+    cat = next((c for c in CATALOG if c["id"] == cat_id), None)
+    if not cat:
+        await callback.answer("Категорію не знайдено", show_alert=True)
+        return
+    kb = get_products_kb(cat_id)
+    await callback.message.edit_text(
+        f"📂 <b>{cat['name']}</b>\n\nОберіть товар:",
+        reply_markup=kb,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("prod_"))
+async def show_product(callback: CallbackQuery) -> None:
+    prod_id = callback.data.replace("prod_", "")
+    prod = find_product(prod_id)
+    if not prod:
+        await callback.answer("Товар не знайдено", show_alert=True)
+        return
+
+    text = (
+        f"🏷 <b>{prod['name']}</b>\n\n"
+        f"{prod.get('description', '')}\n\n"
+        f"💰 Ціна: <b>{prod['price']} грн</b>"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🛒 Додати в кошик", callback_data=f"add_{prod_id}")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_categories")],
+    ])
+    await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("add_"))
+async def add_to_cart(callback: CallbackQuery) -> None:
+    prod_id = callback.data.replace("add_", "")
+    prod = find_product(prod_id)
+    if not prod:
+        await callback.answer("Товар не знайдено", show_alert=True)
+        return
+
+    user_id = callback.from_user.id
+    if user_id not in _carts:
+        _carts[user_id] = []
+
+    cart = _carts[user_id]
+    existing = next((item for item in cart if item["id"] == prod_id), None)
+    if existing:
+        existing["qty"] += 1
+    else:
+        cart.append({"id": prod_id, "name": prod["name"], "price": prod["price"], "qty": 1})
+
+    total_items = sum(item["qty"] for item in cart)
+    await callback.answer(f"✅ Додано! У кошику: {total_items} шт.", show_alert=False)
+
+
+@router.callback_query(F.data == "cart_view")
+async def view_cart(callback: CallbackQuery) -> None:
+    user_id = callback.from_user.id
+    cart = _carts.get(user_id, [])
+
+    if not cart:
+        await callback.answer("🛒 Кошик порожній!", show_alert=True)
+        return
+
+    lines = ["🛒 <b>Ваш кошик:</b>\n"]
+    total = 0
+    for item in cart:
+        subtotal = item["price"] * item["qty"]
+        total += subtotal
+        lines.append(f"• {item['name']} × {item['qty']} = {subtotal} грн")
+    lines.append(f"\n💰 <b>Разом: {total} грн</b>")
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📦 Оформити замовлення", callback_data="cart_checkout")],
+        [InlineKeyboardButton(text="🗑 Очистити кошик", callback_data="cart_clear")],
+        [InlineKeyboardButton(text="⬅️ Продовжити покупки", callback_data="back_categories")],
+    ])
+    await callback.message.edit_text("\n".join(lines), reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "cart_clear")
+async def clear_cart(callback: CallbackQuery) -> None:
+    _carts[callback.from_user.id] = []
+    await callback.message.edit_text("🗑 Кошик очищено!", reply_markup=get_categories_kb())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "cart_checkout")
+async def checkout(callback: CallbackQuery) -> None:
+    user_id = callback.from_user.id
+    cart = _carts.get(user_id, [])
+    if not cart:
+        await callback.answer("Кошик порожній!", show_alert=True)
+        return
+
+    total = sum(item["price"] * item["qty"] for item in cart)
+    user = callback.from_user
+
+    order_text = (
+        f"📦 <b>Замовлення оформлено!</b>\n\n"
+        f"👤 {user.full_name} (@{user.username or '—'})\n"
+        f"💰 Сума: {total} грн\n\n"
+        "Ми зв'яжемося з вами для уточнення деталей доставки!"
+    )
+
+    _carts[user_id] = []
+    await callback.message.edit_text(order_text)
+    await callback.answer("✅ Замовлення прийнято!")

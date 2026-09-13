@@ -1,0 +1,71 @@
+"""
+Обробники AI-бота асистента.
+Підключення до OpenAI API (ChatGPT) із системним промптом.
+"""
+
+from aiogram import Router, F
+from aiogram.filters import CommandStart
+from aiogram.types import Message
+from openai import AsyncOpenAI
+
+from config import OPENAI_API_KEY, AI_SYSTEM_PROMPT, AI_MODEL
+
+router = Router()
+
+client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+
+WELCOME_TEXT = """{{ welcome_text | default('🤖 Вітаю! Я AI-асистент.\n\nЗадайте мені будь-яке питання, і я допоможу!') }}"""
+
+# Зберігаємо історію діалогу для кожного користувача (в пам'яті)
+_conversations: dict[int, list[dict]] = {}
+MAX_HISTORY = 20  # Максимальна кількість повідомлень у контексті
+
+
+@router.message(CommandStart())
+async def cmd_start(message: Message) -> None:
+    user_id = message.from_user.id
+    _conversations[user_id] = []  # Скидаємо контекст
+    await message.answer(WELCOME_TEXT)
+
+
+@router.message(F.text)
+async def handle_message(message: Message) -> None:
+    user_id = message.from_user.id
+
+    # Ініціалізуємо історію, якщо нема
+    if user_id not in _conversations:
+        _conversations[user_id] = []
+
+    history = _conversations[user_id]
+
+    # Додаємо повідомлення користувача
+    history.append({"role": "user", "content": message.text})
+
+    # Обрізаємо історію, якщо занадто довга
+    if len(history) > MAX_HISTORY:
+        history = history[-MAX_HISTORY:]
+        _conversations[user_id] = history
+
+    # Індикатор набору тексту
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+    try:
+        response = await client.chat.completions.create(
+            model=AI_MODEL,
+            messages=[
+                {"role": "system", "content": AI_SYSTEM_PROMPT},
+                *history,
+            ],
+            max_tokens=2000,
+            temperature=0.7,
+        )
+
+        assistant_text = response.choices[0].message.content or "🤔 Не вдалося згенерувати відповідь."
+
+        # Зберігаємо відповідь в історію
+        history.append({"role": "assistant", "content": assistant_text})
+
+        await message.answer(assistant_text)
+
+    except Exception as e:
+        await message.answer(f"⚠️ Помилка AI: {e}\n\nСпробуйте ще раз або напишіть /start для перезапуску.")

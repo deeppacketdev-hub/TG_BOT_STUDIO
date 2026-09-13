@@ -1,0 +1,90 @@
+"""
+Обробники бота-візитки / меню.
+Багаторівнева навігація InlineKeyboard кнопками.
+"""
+
+from aiogram import Router, F
+from aiogram.filters import CommandStart
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+
+router = Router()
+
+# ─── Структура меню (згенеровано конструктором) ─────────────────────
+MENU_ITEMS = {{ menu_items | tojson(indent=4) }}
+
+WELCOME_TEXT = """{{ welcome_text | default('👋 Вітаємо! Оберіть розділ:') }}"""
+
+CONTACT_TEXT = """{{ contact_text | default('📞 Наші контакти:\nТелефон: +380XXXXXXXXX\nEmail: info@example.com') }}"""
+
+
+def build_keyboard(items: list) -> InlineKeyboardMarkup:
+    """Побудувати клавіатуру з переданих пунктів меню."""
+    buttons = []
+    for item in items:
+        buttons.append([
+            InlineKeyboardButton(
+                text=item["label"],
+                callback_data=f"menu_{item['id']}",
+                url=item.get("url"),
+            )
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def find_menu_item(item_id: str, items: list = None) -> dict | None:
+    """Рекурсивний пошук пункту меню за id."""
+    if items is None:
+        items = MENU_ITEMS
+    for item in items:
+        if item["id"] == item_id:
+            return item
+        if "children" in item:
+            found = find_menu_item(item_id, item["children"])
+            if found:
+                return found
+    return None
+
+
+@router.message(CommandStart())
+async def cmd_start(message: Message) -> None:
+    kb = build_keyboard(MENU_ITEMS)
+    await message.answer(WELCOME_TEXT, reply_markup=kb)
+
+
+@router.callback_query(F.data == "menu_back_main")
+async def back_to_main(callback: CallbackQuery) -> None:
+    kb = build_keyboard(MENU_ITEMS)
+    await callback.message.edit_text(WELCOME_TEXT, reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("menu_"))
+async def handle_menu_click(callback: CallbackQuery) -> None:
+    item_id = callback.data.replace("menu_", "")
+    item = find_menu_item(item_id)
+
+    if not item:
+        await callback.answer("⚠️ Розділ не знайдено", show_alert=True)
+        return
+
+    # Якщо у пункту є дочірні елементи — показуємо підменю
+    if "children" in item and item["children"]:
+        children = item["children"]
+        kb = build_keyboard(children)
+        # Додаємо кнопку «Назад»
+        kb.inline_keyboard.append([
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_back_main")
+        ])
+        await callback.message.edit_text(
+            item.get("text", item["label"]),
+            reply_markup=kb,
+        )
+    else:
+        # Кінцевий пункт — показуємо текст
+        text = item.get("text", "ℹ️ Інформація відсутня.")
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ На головну", callback_data="menu_back_main")]
+        ])
+        await callback.message.edit_text(text, reply_markup=kb)
+
+    await callback.answer()

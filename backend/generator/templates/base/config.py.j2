@@ -1,0 +1,20 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
+{% if bot_type == "feedback" %}
+ADMIN_CHAT_ID: int = int(os.getenv("ADMIN_CHAT_ID", "0"))
+{% endif %}
+{% if bot_type == "leadgen" %}
+ADMIN_CHAT_ID: int = int(os.getenv("ADMIN_CHAT_ID", "0"))
+{% endif %}
+{% if bot_type == "ai_assistant" %}
+OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+AI_SYSTEM_PROMPT: str = os.getenv("AI_SYSTEM_PROMPT", "{{ ai_system_prompt | default('Ти — корисний AI-асистент. Відповідай українською мовою.') }}")
+AI_MODEL: str = os.getenv("AI_MODEL", "{{ ai_model | default('gpt-4o-mini') }}")
+{% endif %}
+
+if not BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN не знайдено! Створіть файл .env та вкажіть BOT_TOKEN=ваш_токен")

@@ -1,0 +1,64 @@
+"""
+Обробники бота зворотного зв'язку.
+Користувач пише повідомлення → пересилається адміну → адмін відповідає через Reply.
+"""
+
+from aiogram import Router, F
+from aiogram.filters import CommandStart
+from aiogram.types import Message
+
+from config import ADMIN_CHAT_ID
+
+router = Router()
+
+WELCOME_TEXT = """{{ welcome_text | default("👋 Вітаємо!\n\nНапишіть ваше повідомлення, і ми обов'язково відповімо.") }}"""
+
+# Зберігаємо зв'язок: message_id в адмін-чаті → user_id відправника
+_user_messages: dict[int, int] = {}
+
+
+@router.message(CommandStart())
+async def cmd_start(message: Message) -> None:
+    await message.answer(WELCOME_TEXT)
+
+
+@router.message(F.chat.id == ADMIN_CHAT_ID, F.reply_to_message)
+async def admin_reply(message: Message) -> None:
+    """Адмін відповідає на переслане повідомлення — відповідь летить користувачу."""
+    replied_msg_id = message.reply_to_message.message_id
+    user_id = _user_messages.get(replied_msg_id)
+
+    if not user_id:
+        await message.reply("⚠️ Не вдалося знайти користувача для цього повідомлення.")
+        return
+
+    try:
+        await message.bot.send_message(
+            chat_id=user_id,
+            text=f"💬 <b>Відповідь від підтримки:</b>\n\n{message.text}",
+        )
+        await message.reply("✅ Відповідь надіслано!")
+    except Exception as e:
+        await message.reply(f"❌ Помилка: {e}")
+
+
+@router.message(F.chat.type == "private")
+async def user_message(message: Message) -> None:
+    """Користувач пише в приватний чат — повідомлення пересилається адміну."""
+    user = message.from_user
+    header = (
+        f"📩 <b>Нове повідомлення</b>\n"
+        f"👤 {user.full_name} (@{user.username or '—'})\n"
+        f"🆔 <code>{user.id}</code>\n"
+        f"{'─' * 30}\n\n"
+    )
+
+    try:
+        forwarded = await message.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=header + (message.text or "[медіа/стікер]"),
+        )
+        _user_messages[forwarded.message_id] = user.id
+        await message.answer("✅ Ваше повідомлення надіслано! Ми відповімо найближчим часом.")
+    except Exception:
+        await message.answer("⚠️ На жаль, зараз не вдається зв'язатися з підтримкою. Спробуйте пізніше.")

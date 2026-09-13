@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="TG Bot Studio — кібер-консоль для створення Telegram-ботів. Builder Engine, Analytics Hub, Active Instances.">
+    <meta name="theme-color" content="#0a0d14">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <title>TG_BOT_STUDIO // CONSOLE_v2.0</title>
+
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <!-- ─── CRT Scanline Overlay ─── -->
+    <div class="crt-overlay"></div>
+
+    <!-- ─── Animated Background ─── -->
+    <div class="bg-gradient"></div>
+    <div class="bg-grid"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         CONSOLE HEADER
+         ═══════════════════════════════════════════════════════════════ -->
+    <header class="console-header" id="consoleHeader">
+        <div class="console-title">
+            <span class="title-icon">⚡</span>
+            <span>TG_BOT_STUDIO</span>
+            <span class="title-slash">//</span>
+            <span class="title-version">CONSOLE_v2.0</span>
+        </div>
+
+        <div class="header-controls">
+            <!-- Language Switcher -->
+            <div class="lang-switcher" id="langSwitcher">
+                <span class="lang-label">LANG:</span>
+                <button class="lang-btn active" data-lang="uk">UA</button>
+                <button class="lang-btn" data-lang="en">EN</button>
+                <button class="lang-btn" data-lang="ru">RU</button>
+            </div>
+
+            <!-- Console Log Toggle -->
+            <button class="btn-console-log" id="btnConsoleLog">
+                <span class="log-dot"></span>
+                LOGS
+            </button>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         TAB BAR
+         ═══════════════════════════════════════════════════════════════ -->
+    <nav class="tab-bar" id="tabBar">
+        <button class="tab-btn active" data-tab="builder">
+            <span class="tab-icon">⚙️</span>
+            <span class="tab-idx">[01]</span> BUILDER_ENGINE
+        </button>
+        <button class="tab-btn" data-tab="analytics">
+            <span class="tab-icon">📊</span>
+            <span class="tab-idx">[02]</span> ANALYTICS_HUB
+        </button>
+        <button class="tab-btn" data-tab="instances">
+            <span class="tab-icon">🤖</span>
+            <span class="tab-idx">[03]</span> ACTIVE_INSTANCES
+        </button>
+    </nav>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         STATUS BAR
+         ═══════════════════════════════════════════════════════════════ -->
+    <div class="status-bar" id="statusBar">
+        <div class="status-item">
+            <span class="status-dot green"></span>
+            <span class="status-label">SYSTEM:</span>
+            <span class="status-value green" id="statusSystem">ONLINE</span>
+        </div>
+        <span class="status-separator">│</span>
+        <div class="status-item">
+            <span class="status-label">LATENCY:</span>
+            <span class="status-value" id="statusLatency">12ms</span>
+        </div>
+        <span class="status-separator">│</span>
+        <div class="status-item">
+            <span class="status-label">PORT:</span>
+            <span class="status-value">8080</span>
+        </div>
+        <span class="status-separator">│</span>
+        <div class="status-item">
+            <span class="status-label">BOTS:</span>
+            <span class="status-value" id="statusBots">0</span>
+        </div>
+        <span class="status-separator">│</span>
+        <div class="status-item">
+            <span class="status-label">UPTIME:</span>
+            <span class="status-value" id="statusUptime">00:00:00</span>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         MAIN CONTAINER
+         ═══════════════════════════════════════════════════════════════ -->
+    <main class="main-container" id="mainContainer">
+
+        <!-- ─────────────────────────────────────────────────────────
+             TAB 1: BUILDER_ENGINE
+             ───────────────────────────────────────────────────────── -->
+        <div class="tab-panel active" id="panelBuilder" data-panel="builder">
+
+            <!-- Builder Step Indicator -->
+            <div class="builder-steps-bar" id="builderSteps">
+                <div class="builder-step-dot active" data-step="0"><span>01</span></div>
+                <div class="builder-step-line"></div>
+                <div class="builder-step-dot" data-step="1"><span>02</span></div>
+                <div class="builder-step-line"></div>
+                <div class="builder-step-dot" data-step="2"><span>03</span></div>
+                <div class="builder-step-line"></div>
+                <div class="builder-step-dot" data-step="3"><span>04</span></div>
+            </div>
+
+            <!-- ═══ STEP 0: Choose Bot Type ═══ -->
+            <section class="wizard-step active" id="step0">
+                <div class="step-content">
+                    <div class="step-header">
+                        <span class="terminal-prefix">select_bot_type</span>
+                        <h1 class="step-title" data-i18n="step0.title">Оберіть тип бота</h1>
+                        <p class="step-subtitle" data-i18n="step0.subtitle">Що має робити ваш Telegram-бот?</p>
+                    </div>
+                    <div class="bot-type-grid" id="botTypeGrid">
+                        <!-- Bot type cards injected by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══ STEP 1: Configure Bot ═══ -->
+            <section class="wizard-step" id="step1">
+                <div class="step-content step-split">
+                    <div class="config-panel">
+                        <div class="step-header" style="text-align:left;">
+                            <button class="btn-back" id="btnBack1" data-i18n="step1.back">← cd ..</button>
+                            <span class="terminal-prefix">configure</span>
+                            <h2 class="step-title" id="configTitle">Налаштування</h2>
+                            <p class="step-subtitle" id="configSubtitle">Заповніть параметри вашого бота</p>
+                        </div>
+                        <div class="config-form" id="configForm">
+                            <!-- Dynamic form fields injected by JS -->
+                        </div>
+                        <button class="btn-primary btn-next" id="btnNext1" data-i18n="step1.next">
+                            ДАЛІ → ПЕРЕГЛЯД
+                            <span class="btn-arrow">→</span>
+                        </button>
+                    </div>
+                    <div class="simulator-panel" id="simulatorPanel">
+                        <div class="phone-frame">
+                            <div class="phone-notch"></div>
+                            <div class="phone-screen">
+                                <div class="tg-header">
+                                    <div class="tg-avatar" id="tgAvatar">🤖</div>
+                                    <div class="tg-header-info">
+                                        <span class="tg-bot-name" id="tgBotName" data-i18n="step1.defaultBotName">Мій Бот</span>
+                                        <span class="tg-status" data-i18n="step1.simOnline">онлайн</span>
+                                    </div>
+                                </div>
+                                <div class="tg-chat" id="tgChat">
+                                    <!-- Chat messages injected by simulator.js -->
+                                </div>
+                                <div class="tg-input-bar">
+                                    <input type="text" class="tg-input" placeholder="Повідомлення..." id="tgInput" data-i18n="step1.msgPlaceholder" data-i18n-target="placeholder" readonly>
+                                    <button class="tg-send" id="tgSend">➤</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══ STEP 2: Payment ═══ -->
+            <section class="wizard-step" id="step2">
+                <div class="step-content">
+                    <div class="step-header">
+                        <button class="btn-back" id="btnBack2" data-i18n="step2.back">← cd ..</button>
+                        <span class="terminal-prefix">process_payment</span>
+                        <h2 class="step-title" data-i18n="step2.title">Оплата</h2>
+                        <p class="step-subtitle" data-i18n="step2.subtitle">Оплатіть, щоб завантажити готовий проєкт</p>
+                    </div>
+                    <div class="payment-card">
+                        <div class="payment-summary">
+                            <div class="payment-bot-type" id="paymentBotType">🤖 Бот-візитка</div>
+                            <div class="payment-price">
+                                <span class="price-old" data-i18n="step2.priceOld">599 грн</span>
+                                <span class="price-current" id="paymentPrice" data-i18n="step2.priceCurrent">299 грн</span>
+                            </div>
+                            <ul class="payment-features">
+                                <li data-i18n="step2.feature1">✅ Повний вихідний код (Python / aiogram 3)</li>
+                                <li data-i18n="step2.feature2">✅ Dockerfile для деплою за 1 хвилину</li>
+                                <li data-i18n="step2.feature3">✅ Покрокова інструкція запуску</li>
+                                <li data-i18n="step2.feature4">✅ Необмежене використання</li>
+                                <li data-i18n="step2.feature5">✅ Без підписок та прихованих платежів</li>
+                            </ul>
+                        </div>
+                        <div class="payment-methods">
+                            <button class="btn-pay" id="btnPay">
+                                <span class="pay-icon">💳</span>
+                                <span data-i18n="step2.payBtn">ОПЛАТИТИ 299 ГРН</span>
+                            </button>
+                            <p class="payment-note" data-i18n="step2.payNote">🔒 Безпечна оплата. Тестовий режим: оплата симулюється автоматично.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══ STEP 3: Deploy Choice ═══ -->
+            <section class="wizard-step" id="step3">
+                <div class="step-content">
+                    <div class="step-header">
+                        <div class="success-animation" id="successAnimation">
+                            <div class="success-circle">
+                                <svg class="checkmark" viewBox="0 0 52 52">
+                                    <circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                                    <path class="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <span class="terminal-prefix">build_complete</span>
+                        <h2 class="step-title" data-i18n="step3.title">Бот готовий! 🎉</h2>
+                        <p class="step-subtitle" data-i18n="step3.deployChoice">Оберіть спосіб запуску бота</p>
+                    </div>
+
+                    <!-- Deploy Choice Cards -->
+                    <div class="deploy-choice-grid">
+
+                        <!-- Option A: Run Locally -->
+                        <div class="deploy-card deploy-local" id="deployLocalCard">
+                            <div class="deploy-card-header">
+                                <span class="deploy-icon">🖥️</span>
+                                <span class="deploy-badge deploy-badge-auto">AUTO</span>
+                            </div>
+                            <h3 class="deploy-card-title" data-i18n="step3.localTitle">Запустити на цьому пристрої</h3>
+                            <p class="deploy-card-desc" data-i18n="step3.localDesc">Бот автоматично розгорнеться та почне працювати зараз</p>
+                            <ul class="deploy-features">
+                                <li>⚡ Автоматичне розгортання</li>
+                                <li>📦 Встановлення залежностей</li>
+                                <li>🚀 Миттєвий запуск</li>
+                                <li>🔄 Управління через Active Instances</li>
+                            </ul>
+                            <button class="btn-deploy-local" id="btnDeployLocal">
+                                <span>🖥️</span> <span data-i18n="step3.deployLocalBtn">РОЗГОРНУТИ ТА ЗАПУСТИТИ</span>
+                            </button>
+
+                            <!-- Disclaimer (hidden, shown on hover/click) -->
+                            <div class="deploy-disclaimer" id="deployDisclaimer">
+                                <div class="disclaimer-header">⚠️ <span data-i18n="step3.disclaimerTitle">Важливо знати:</span></div>
+                                <ul>
+                                    <li data-i18n="step3.discl1">Бот працює поки запущений цей сервер</li>
+                                    <li data-i18n="step3.discl2">Потрібен стабільний інтернет</li>
+                                    <li data-i18n="step3.discl3">При перезапуску сервера — бота треба запустити вручну</li>
+                                    <li data-i18n="step3.discl4">Для AI-ботів потрібен валідний OpenAI ключ</li>
+                                    <li data-i18n="step3.discl5">Максимум ботів залежить від ресурсів пристрою</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Option B: Download ZIP -->
+                        <div class="deploy-card deploy-zip" id="deployZipCard">
+                            <div class="deploy-card-header">
+                                <span class="deploy-icon">📦</span>
+                                <span class="deploy-badge deploy-badge-manual">MANUAL</span>
+                            </div>
+                            <h3 class="deploy-card-title" data-i18n="step3.zipTitle">Завантажити .ZIP архів</h3>
+                            <p class="deploy-card-desc" data-i18n="step3.zipDesc">Отримайте код для запуску на іншому сервері чи VPS</p>
+                            <ul class="deploy-features">
+                                <li>📁 Повний вихідний код Python</li>
+                                <li>📋 Покрокова інструкція</li>
+                                <li>🐳 Dockerfile для деплою</li>
+                                <li>🌐 Запуск на будь-якому сервері</li>
+                            </ul>
+                            <button class="btn-deploy-zip" id="btnDownload">
+                                <span>📦</span> <span data-i18n="step3.downloadBtn">ЗАВАНТАЖИТИ .ZIP</span>
+                            </button>
+                        </div>
+
+                    </div>
+
+                    <!-- Deploy Progress (hidden by default) -->
+                    <div class="deploy-progress" id="deployProgress" style="display: none;">
+                        <div class="deploy-progress-header">
+                            <span class="terminal-prefix">deploy_process</span>
+                            <span class="deploy-status-text" id="deployStatusText">Initializing...</span>
+                        </div>
+                        <div class="deploy-log" id="deployLog">
+                            <!-- Log lines will be injected here -->
+                        </div>
+                        <div class="deploy-progress-bar">
+                            <div class="deploy-progress-fill" id="deployProgressFill"></div>
+                        </div>
+                    </div>
+
+                    <!-- Post-deploy message (hidden) -->
+                    <div class="deploy-result" id="deployResult" style="display: none;">
+                        <div class="deploy-result-success">
+                            <span class="result-icon">✅</span>
+                            <span class="result-text" id="deployResultText">Бот запущений!</span>
+                        </div>
+                        <div class="deploy-result-actions">
+                            <button class="btn-console" id="btnGoToInstances">📡 ACTIVE_INSTANCES</button>
+                            <button class="btn-secondary" id="btnCreateAnother" data-i18n="step3.createAnother">➕ СТВОРИТИ ЩЕ ОДНОГО БОТА</button>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+        </div><!-- /panelBuilder -->
+
+        <!-- ─────────────────────────────────────────────────────────
+             TAB 2: ANALYTICS_HUB (Placeholder)
+             ───────────────────────────────────────────────────────── -->
+        <div class="tab-panel" id="panelAnalytics" data-panel="analytics">
+            <!-- Analytics dashboard rendered by analytics.js -->
+            <div class="panel-placeholder" id="analyticsPlaceholder">
+                <div class="placeholder-icon">📊</div>
+                <div class="placeholder-title">ANALYTICS_HUB // LOADING...</div>
+                <p class="placeholder-text">Завантаження даних аналітики...</p>
+            </div>
+        </div>
+
+        <!-- ─────────────────────────────────────────────────────────
+             TAB 3: ACTIVE_INSTANCES (Placeholder)
+             ───────────────────────────────────────────────────────── -->
+        <div class="tab-panel" id="panelInstances" data-panel="instances">
+            <!-- Instances dashboard rendered by instances.js -->
+            <div class="panel-placeholder" id="instancesPlaceholder">
+                <div class="placeholder-icon">🤖</div>
+                <div class="placeholder-title">ACTIVE_INSTANCES // LOADING...</div>
+                <p class="placeholder-text">Завантаження екземплярів ботів...</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ─── Console Log Panel ─── -->
+    <div class="console-log-panel" id="consoleLogPanel">
+        <div class="console-log-header">
+            <span>SYSTEM_LOG // CONSOLE_OUTPUT</span>
+            <button class="console-log-close" id="btnCloseLog">✕</button>
+        </div>
+        <div class="console-log-body" id="consoleLogBody">
+            <!-- Log entries injected by JS -->
+        </div>
+    </div>
+
+    <!-- ─── Loading Overlay ─── -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loader">
+            <div class="loader-ring"></div>
+            <p class="loader-text" id="loaderText">Генеруємо вашого бота...</p>
+        </div>
+    </div>
+
+    <!-- ─── Toast Notifications ─── -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="/js/i18n.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/wizard.js"></script>
+    <script src="/js/simulator.js"></script>
+    <script src="/js/analytics.js"></script>
+    <script src="/js/instances.js"></script>
+</body>
+</html>

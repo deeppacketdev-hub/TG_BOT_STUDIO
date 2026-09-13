@@ -1,0 +1,67 @@
+# {{ bot_name | default('Мій Telegram Бот') }}
+
+> Згенеровано за допомогою **TG Bot Builder** 🤖
+
+## Швидкий старт
+
+### 1. Встановіть залежності
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Налаштуйте оточення
+
+Перейменуйте файл `.env.example` на `.env` та заповніть необхідні значення:
+
+```bash
+cp .env.example .env
+```
+
+Відредагуйте `.env` у будь-якому текстовому редакторі:
+
+```
+BOT_TOKEN=123456:ABC-DEF...    # Токен від @BotFather
+{% if bot_type == "feedback" or bot_type == "leadgen" %}
+ADMIN_CHAT_ID=123456789        # Ваш Telegram ID (дізнатись: @userinfobot)
+{% endif %}
+{% if bot_type == "ai_assistant" %}
+OPENAI_API_KEY=sk-...          # Ключ OpenAI API
+{% endif %}
+```
+
+### 3. Запустіть бота
+
+```bash
+python main.py
+```
+
+### 4. Запуск через Docker (опційно)
+
+```bash
+docker build -t my-tg-bot .
+docker run -d --env-file .env --name my-tg-bot my-tg-bot
+```
+
+## Структура проєкту
+
+```
+{{ bot_name | default('my-bot') }}/
+├── main.py           # Точка входу — запуск бота
+├── config.py         # Конфігурація та змінні оточення
+├── handlers.py       # Обробники повідомлень та команд
+├── requirements.txt  # Залежності Python
+├── .env.example      # Шаблон змінних оточення
+├── Dockerfile        # Для контейнеризації
+└── README.md         # Цей файл
+```
+
+## Тип бота
+
+**{{ bot_type_display }}**
+
+{{ bot_description }}
+
+---
+
+*Створено з ❤️ за допомогою TG Bot Builder*

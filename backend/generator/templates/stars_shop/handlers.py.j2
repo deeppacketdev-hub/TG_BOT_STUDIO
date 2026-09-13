@@ -1,0 +1,302 @@
+"""
+Обробники бота-магазину цифрових товарів за Telegram Stars (XTR).
+Каталог товарів, інвойси, PreCheckoutQuery, SuccessfulPayment.
+"""
+
+import json
+import sqlite3
+import logging
+from datetime import datetime
+from pathlib import Path
+
+from aiogram import Router, F, Bot
+from aiogram.filters import CommandStart
+from aiogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    LabeledPrice,
+    PreCheckoutQuery,
+    ContentType,
+)
+
+router = Router()
+logger = logging.getLogger(__name__)
+
+WELCOME_TEXT = """{{ welcome_text | default('⭐ Вітаємо в магазині цифрових товарів!\n\nОберіть товар для покупки за Telegram Stars:') }}"""
+
+# ─── Каталог цифрових товарів (згенеровано конструктором) ────────────
+PRODUCTS = {{ products | tojson(indent=4) }}
+
+# ─── SQLite: історія покупок ─────────────────────────────────────────
+DB_PATH = Path(__file__).parent / "purchases.db"
+
+
+def _init_db() -> None:
+    """Ініціалізація бази даних покупок."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS purchases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            username TEXT,
+            full_name TEXT,
+            product_id TEXT NOT NULL,
+            product_title TEXT NOT NULL,
+            price_stars INTEGER NOT NULL,
+            telegram_payment_charge_id TEXT,
+            provider_payment_charge_id TEXT,
+            purchased_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def _save_purchase(
+    user_id: int,
+    username: str | None,
+    full_name: str,
+    product_id: str,
+    product_title: str,
+    price_stars: int,
+    tg_charge_id: str,
+    provider_charge_id: str,
+) -> None:
+    """Зберегти покупку в базу даних."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        """INSERT INTO purchases
+           (user_id, username, full_name, product_id, product_title,
+            price_stars, telegram_payment_charge_id, provider_payment_charge_id, purchased_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            user_id,
+            username,
+            full_name,
+            product_id,
+            product_title,
+            price_stars,
+            tg_charge_id,
+            provider_charge_id,
+            datetime.utcnow().isoformat(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+# Ініціалізуємо базу при завантаженні модуля
+_init_db()
+
+
+# ─── Допоміжні функції ───────────────────────────────────────────────
+
+def find_product(product_id: str) -> dict | None:
+    """Знайти товар за ID."""
+    for prod in PRODUCTS:
+        if prod["id"] == product_id:
+            return prod
+    return None
+
+
+def get_catalog_kb() -> InlineKeyboardMarkup:
+    """Побудувати клавіатуру каталогу товарів."""
+    buttons = []
+    for prod in PRODUCTS:
+        emoji = "📄" if prod.get("type") == "file" else "🔗"
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{emoji} {prod['title']} — {prod['price']} ⭐",
+                callback_data=f"stars_item_{prod['id']}",
+            )
+        ])
+    buttons.append([
+        InlineKeyboardButton(text="📋 Мої покупки", callback_data="stars_my_purchases")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+# ─── Команда /start ──────────────────────────────────────────────────
+
+@router.message(CommandStart())
+async def cmd_start(message: Message) -> None:
+    await message.answer(WELCOME_TEXT, reply_markup=get_catalog_kb())
+
+
+# ─── Показати товар ──────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("stars_item_"))
+async def show_item(callback: CallbackQuery) -> None:
+    prod_id = callback.data.replace("stars_item_", "")
+    prod = find_product(prod_id)
+    if not prod:
+        await callback.answer("Товар не знайдено", show_alert=True)
+        return
+
+    emoji = "📄" if prod.get("type") == "file" else "🔗"
+    text = (
+        f"{emoji} <b>{prod['title']}</b>\n\n"
+        f"{prod.get('description', '')}\n\n"
+        f"💫 Ціна: <b>{prod['price']} ⭐ Stars</b>"
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"💳 Купити за {prod['price']} ⭐",
+            callback_data=f"stars_buy_{prod['id']}",
+        )],
+        [InlineKeyboardButton(text="⬅️ Каталог", callback_data="stars_back_catalog")],
+    ])
+    await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+
+# ─── Назад до каталогу ───────────────────────────────────────────────
+
+@router.callback_query(F.data == "stars_back_catalog")
+async def back_to_catalog(callback: CallbackQuery) -> None:
+    await callback.message.edit_text(WELCOME_TEXT, reply_markup=get_catalog_kb())
+    await callback.answer()
+
+
+# ─── Створити інвойс (Telegram Stars Payment) ────────────────────────
+
+@router.callback_query(F.data.startswith("stars_buy_"))
+async def buy_item(callback: CallbackQuery, bot: Bot) -> None:
+    prod_id = callback.data.replace("stars_buy_", "")
+    prod = find_product(prod_id)
+    if not prod:
+        await callback.answer("Товар не знайдено", show_alert=True)
+        return
+
+    # Надсилаємо інвойс з валютою XTR (Telegram Stars)
+    await bot.send_invoice(
+        chat_id=callback.message.chat.id,
+        title=prod["title"],
+        description=prod.get("description", "Цифровий товар"),
+        payload=json.dumps({"product_id": prod_id}),
+        currency="XTR",
+        prices=[LabeledPrice(label=prod["title"], amount=prod["price"])],
+    )
+    await callback.answer()
+
+
+# ─── PreCheckoutQuery — підтвердження готовності ─────────────────────
+
+@router.pre_checkout_query()
+async def handle_pre_checkout(pre_checkout_query: PreCheckoutQuery) -> None:
+    """Підтверджуємо, що можемо надати товар."""
+    try:
+        payload = json.loads(pre_checkout_query.invoice_payload)
+        prod = find_product(payload.get("product_id", ""))
+        if prod:
+            await pre_checkout_query.answer(ok=True)
+        else:
+            await pre_checkout_query.answer(
+                ok=False,
+                error_message="Товар не знайдено. Спробуйте ще раз.",
+            )
+    except Exception:
+        await pre_checkout_query.answer(
+            ok=False,
+            error_message="Помилка обробки оплати. Спробуйте пізніше.",
+        )
+
+
+# ─── SuccessfulPayment — видача товару після оплати ──────────────────
+
+@router.message(F.content_type == ContentType.SUCCESSFUL_PAYMENT)
+async def handle_successful_payment(message: Message, bot: Bot) -> None:
+    """Після успішної оплати видаємо файл або посилання."""
+    payment = message.successful_payment
+
+    try:
+        payload = json.loads(payment.invoice_payload)
+        prod_id = payload.get("product_id", "")
+    except (json.JSONDecodeError, AttributeError):
+        prod_id = ""
+
+    prod = find_product(prod_id)
+    if not prod:
+        await message.answer("❌ Помилка: товар не знайдено. Зверніться до підтримки.")
+        return
+
+    # Зберігаємо покупку в базу
+    _save_purchase(
+        user_id=message.from_user.id,
+        username=message.from_user.username,
+        full_name=message.from_user.full_name,
+        product_id=prod_id,
+        product_title=prod["title"],
+        price_stars=payment.total_amount,
+        tg_charge_id=payment.telegram_payment_charge_id,
+        provider_charge_id=payment.provider_payment_charge_id or "",
+    )
+
+    logger.info(
+        f"💫 Продаж! {message.from_user.full_name} купив '{prod['title']}' "
+        f"за {payment.total_amount} ⭐ Stars"
+    )
+
+    # Видаємо товар
+    if prod.get("type") == "file" and prod.get("content"):
+        # Відправляємо файл
+        from aiogram.types import FSInputFile
+        file_path = Path(__file__).parent / "files" / prod["content"]
+        if file_path.exists():
+            await message.answer_document(
+                document=FSInputFile(file_path),
+                caption=f"✅ Оплата пройшла успішно!\n\n📄 Ваш файл: <b>{prod['title']}</b>",
+            )
+        else:
+            await message.answer(
+                f"✅ Оплата пройшла успішно!\n\n"
+                f"📄 Файл: <b>{prod['title']}</b>\n"
+                f"⚠️ Файл буде додано адміністратором. Збережіть чек оплати."
+            )
+    elif prod.get("type") == "link" and prod.get("content"):
+        # Відправляємо секретне посилання
+        await message.answer(
+            f"✅ Оплата пройшла успішно!\n\n"
+            f"🔗 Ваше посилання:\n{prod['content']}\n\n"
+            f"⚠️ Це посилання персональне — не передавайте його іншим.",
+        )
+    else:
+        await message.answer(
+            f"✅ Оплата за <b>{prod['title']}</b> пройшла успішно!\n\n"
+            f"Зверніться до адміністратора для отримання товару."
+        )
+
+
+# ─── Мої покупки ─────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "stars_my_purchases")
+async def my_purchases(callback: CallbackQuery) -> None:
+    """Показати історію покупок користувача."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.execute(
+        "SELECT product_title, price_stars, purchased_at FROM purchases WHERE user_id = ? ORDER BY purchased_at DESC LIMIT 10",
+        (callback.from_user.id,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        await callback.answer("У вас ще немає покупок", show_alert=True)
+        return
+
+    lines = ["📋 <b>Ваші останні покупки:</b>\n"]
+    for title, price, date in rows:
+        dt = date[:10] if date else "—"
+        lines.append(f"• {title} — {price} ⭐ ({dt})")
+
+    total = sum(price for _, price, _ in rows)
+    lines.append(f"\n💫 <b>Всього витрачено: {total} ⭐</b>")
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Каталог", callback_data="stars_back_catalog")],
+    ])
+    await callback.message.edit_text("\n".join(lines), reply_markup=kb)
+    await callback.answer()
