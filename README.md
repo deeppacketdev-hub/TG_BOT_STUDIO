@@ -53,7 +53,8 @@ tg-bot-builder/
 │   ├── index.html           # Main SPA interface
 │   ├── manifest.json        # Web App Manifest
 │   └── sw.js                # Service Worker
-├── DEVELOPMENT_PLAN.md      # Detailed architectural & milestone roadmap
+├── DEVELOPMENT_PLAN.md      # Phase 1 Roadmap (Blocks 1–6: Console UI, i18n, Stars Shop, Analytics)
+├── ROADMAP_V2.md            # Phase 2 Roadmap (Blocks 7–14: Token economy, custom /start, digital shop, CI/CD)
 ├── .gitignore
 └── README.md
 ```
